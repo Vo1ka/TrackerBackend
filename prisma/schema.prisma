@@ -11,6 +11,8 @@ datasource db {
 model User {
   id           Int        @id @default(autoincrement())
   email        String     @unique
+  isBlocked      Boolean  @default(false)
+  blockReason    String?
   password     String
   name         String?
   bio          String?
@@ -30,6 +32,10 @@ model User {
   friendsReqSent      Friendship[] @relation("friendsReqSent")
   friendsReqReceived  Friendship[] @relation("friendsReqReceived")
   groupMemberships    GroupMember[]
+
+  // Обратные связи для жалоб
+  reportsSent      Report[] @relation("reporter")
+  reportsReceived  Report[] @relation("targetUser")
 }
 
 model Goal {
@@ -45,16 +51,25 @@ model Goal {
   updatedAt    DateTime  @updatedAt
   completedAt  DateTime?
 
+  isFlagged    Boolean  @default(false)                  // << флаг: подозрительная цель
+  flagReason   String?                                   // << причина флага
+
   steps        Step[]
   subtasks     Subtask[]
   template     GoalTemplate? @relation(fields: [templateId], references: [id])
   templateId   Int?
+  // Обратные связи для жалоб
+  reports      Report[]
 }
 
 model Step {
   id        Int      @id @default(autoincrement())
   goal      Goal     @relation(fields: [goalId], references: [id])
   goalId    Int
+
+  isFlagged    Boolean  @default(false)                  // << флаг: подозрительная цель
+  flagReason   String?                                   // << причина флага
+
   value     Int?     // для progressType=quantity
   note      String?
   createdAt DateTime @default(now())
@@ -64,6 +79,10 @@ model Subtask {
   id        Int      @id @default(autoincrement())
   goal      Goal     @relation(fields: [goalId], references: [id])
   goalId    Int
+
+  isFlagged    Boolean  @default(false)                  // << флаг: подозрительная цель
+  flagReason   String?                                   // << причина флага
+
   title     String
   completed Boolean  @default(false)
 }
@@ -144,4 +163,18 @@ model GroupGoal {
   title     String
   description String?
   createdAt DateTime @default(now())
+}
+
+model Report {
+  id          Int      @id @default(autoincrement())
+  createdAt   DateTime @default(now())
+  reporter    User     @relation("reporter", fields: [reporterId], references: [id])
+  reporterId  Int
+  targetUser  User?    @relation("targetUser", fields: [targetUserId], references: [id])
+  targetUserId Int?
+  targetGoal    Goal?    @relation(fields: [targetGoalId], references: [id])
+  targetGoalId  Int?
+  reason      String
+  status      String   // open, in_review, closed
+  decision    String?  // action_taken, declined, etc.
 }
