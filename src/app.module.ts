@@ -11,6 +11,13 @@ import { AchievementsModule } from './achievements/achievements.module';
 import { AchievementsService } from './achievements/achievements.service';
 import { FeedModule } from './feed/feed.module';
 import { FeedController } from './feed/feed.controller';
+import { FriendsModule } from './friends/friends.module';
+import { FriendsController } from './friends/friends.controller';
+import { FriendsService } from './friends/friends.service';
+import { FeedService } from './feed/feed.service';
+import { GroupsModule } from './groups/groups.module';
+import { GroupsController } from './groups/groups.controller';
+import { GroupsService } from './groups/groups.service';
 
 
 @Module({
@@ -18,20 +25,26 @@ import { FeedController } from './feed/feed.controller';
     AuthModule,
     PrismaModule,
     AchievementsModule, 
-    FeedModule
+    FeedModule,
+    FriendsModule,
+    GroupsModule
   ],
   controllers: [
     ProfileController, 
     GoalsController,
     StepsController,
     SubtasksController,
-    FeedController
+    FeedController,
+    FriendsController,
+    GroupsController
   ],
   providers: [
     PrismaService, 
     ContentModerationService, 
     AchievementsService,
-    FeedController
+    FeedService,
+    FriendsService,
+    GroupsService
   ]
 })
 export class AppModule {}
