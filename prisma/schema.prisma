@@ -10,10 +10,139 @@ datasource db {
 }
 
 model User {
+  id           Int        @id @default(autoincrement())
+  email        String     @unique
+  password     String
+  name         String?
+  bio          String?
+  avatarUrl    String?
+  privacy      String?     // public, private, friends-only
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  // Стрики
+  currentStreak  Int?     // текущий стрик
+  longestStreak  Int?     // максимальный стрик
+
+  // Связи
+  goals        Goal[]
+  achievements AchievementOnUser[]
+  feedEvents   FeedEvent[]
+  friendsReqSent      Friendship[] @relation("friendsReqSent")
+  friendsReqReceived  Friendship[] @relation("friendsReqReceived")
+  groupMemberships    GroupMember[]
+}
+
+model Goal {
+  id           Int       @id @default(autoincrement())
+  user         User      @relation(fields: [userId], references: [id])
+  userId       Int
+  title        String
+  description  String?
+  privacy      String?   // public, private, friends-only
+  progressType String    // quantity, days, subtasks, duration
+  targetValue  Int?      // целевое значение для количественных целей
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  completedAt  DateTime?
+
+  steps        Step[]
+  subtasks     Subtask[]
+  template     GoalTemplate? @relation(fields: [templateId], references: [id])
+  templateId   Int?
+}
+
+model Step {
   id        Int      @id @default(autoincrement())
-  email     String   @unique
-  password  String
-  name      String?
+  goal      Goal     @relation(fields: [goalId], references: [id])
+  goalId    Int
+  value     Int?     // для progressType=quantity
+  note      String?
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+}
+
+model Subtask {
+  id        Int      @id @default(autoincrement())
+  goal      Goal     @relation(fields: [goalId], references: [id])
+  goalId    Int
+  title     String
+  completed Boolean  @default(false)
+}
+
+model GoalTemplate {
+  id          Int     @id @default(autoincrement())
+  title       String
+  description String?
+  category    String
+  // Можно добавить дефолтные шаги, параметры
+  goals       Goal[]
+}
+
+model Achievement {
+  id          Int        @id @default(autoincrement())
+  code        String     @unique
+  title       String
+  description String
+  iconUrl     String?
+  // Можно добавить условия — например, minGoals, minStreak и т.п.
+  users       AchievementOnUser[]
+}
+
+model AchievementOnUser {
+  id              Int          @id @default(autoincrement())
+  user            User         @relation(fields: [userId], references: [id])
+  userId          Int
+  achievement     Achievement  @relation(fields: [achievementId], references: [id])
+  achievementId   Int
+  achievedAt      DateTime     @default(now())
+  progress        Int?         // например, если ачивка с прогрессом
+}
+
+model FeedEvent {
+  id        Int      @id @default(autoincrement())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    Int
+  type      String   // goal_created, goal_completed, achievement_unlocked и т.д.
+  data      Json?    // дополнительные данные (например, id цели)
+  createdAt DateTime @default(now())
+}
+
+model Friendship {
+  id         Int     @id @default(autoincrement())
+  requester  User    @relation("friendsReqSent", fields: [requesterId], references: [id])
+  requesterId Int
+  addressee  User    @relation("friendsReqReceived", fields: [addresseeId], references: [id])
+  addresseeId Int
+
+  status     String   // pending, accepted, rejected
+  createdAt  DateTime @default(now())
+}
+
+model Group {
+  id          Int          @id @default(autoincrement())
+  title       String
+  description String?
+  createdAt   DateTime     @default(now())
+
+  members     GroupMember[]
+  goals       GroupGoal[]
+}
+
+model GroupMember {
+  id        Int      @id @default(autoincrement())
+  group     Group    @relation(fields: [groupId], references: [id])
+  groupId   Int
+  user      User     @relation(fields: [userId], references: [id])
+  userId    Int
+  role      String   // member, admin, owner
+  joinedAt  DateTime @default(now())
+}
+
+model GroupGoal {
+  id        Int      @id @default(autoincrement())
+  group     Group    @relation(fields: [groupId], references: [id])
+  groupId   Int
+  title     String
+  description String?
+  createdAt DateTime @default(now())
 }
