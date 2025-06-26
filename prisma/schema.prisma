@@ -102,7 +102,9 @@ model Achievement {
   title       String
   description String
   iconUrl     String?
-  // Можно добавить условия — например, minGoals, minStreak и т.п.
+  type        String   // <-- вот это обязательно!
+  requirement Json?    // <-- и это, если используешь requirement
+
   users       AchievementOnUser[]
 }
 
@@ -178,3 +180,4 @@ model Report {
   status      String   // open, in_review, closed
   decision    String?  // action_taken, declined, etc.
 }
+
