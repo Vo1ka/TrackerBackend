@@ -108,5 +108,36 @@ export class GroupsController {
     async getLeaderboard(@Param('goalId') goalId: string) {
       return this.groupsService.getLeaderboard(Number(goalId));
     }
+    // Получить сообщения чата группы
+  @Get(':groupId/chat')
+  async getGroupChat(
+    @Param('groupId') groupId: string,
+    @Query('limit') limit = '50',
+    @Query('offset') offset = '0'
+  ) {
+    return this.prisma.groupMessage.findMany({
+      where: { groupId: Number(groupId) },
+      orderBy: { createdAt: 'desc' },
+      take: Number(limit),
+      skip: Number(offset)
+    });
+  }
+
+  // Отправить сообщение в чат группы
+  @Post(':groupId/chat')
+  async postGroupMessage(
+    @Req() req: AuthenticatedRequest,
+    @Param('groupId') groupId: string,
+    @Body() body: { text: string }
+  ) {
+    // (опционально: проверить, является ли юзер участником группы)
+    return this.prisma.groupMessage.create({
+      data: {
+        groupId: Number(groupId),
+        userId: req.user.userId,
+        text: body.text
+      }
+    });
+  }
 
 }
