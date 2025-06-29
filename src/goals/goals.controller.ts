@@ -63,12 +63,16 @@ export class GoalsController {
     return this.prisma.goal.findMany({
       where: { userId: req.user.userId },
       orderBy: { createdAt: 'desc' },
+      include: { steps: true, subtasks: true },
     });
   }
 
   @Get(':id')
   async getGoal(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
-    const goal = await this.prisma.goal.findUnique({ where: { id: Number(id) } });
+    const goal = await this.prisma.goal.findUnique({ 
+      where: { id: Number(id) },
+      include: { steps: true, subtasks: true }
+     });
     if (!goal) throw new NotFoundException('Цель не найдена');
     if (goal.userId !== req.user.userId) throw new ForbiddenException('Нет доступа');
     return goal;
@@ -102,11 +106,17 @@ export class GoalsController {
   }
 
   @Delete(':id')
-  async deleteGoal(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
-    const goal = await this.prisma.goal.findUnique({ where: { id: Number(id) } });
-    if (!goal) throw new NotFoundException('Цель не найдена');
-    if (goal.userId !== req.user.userId) throw new ForbiddenException('Нет доступа');
-    await this.prisma.goal.delete({ where: { id: Number(id) } });
-    return { message: 'Цель удалена' };
-  }
+    async deleteGoal(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+      const goal = await this.prisma.goal.findUnique({ where: { id: Number(id) } });
+      if (!goal) throw new NotFoundException('Цель не найдена');
+      if (goal.userId !== req.user.userId) throw new ForbiddenException('Нет доступа');
+
+      // Сначала удалить все связанные шаги и подцели!
+      await this.prisma.step.deleteMany({ where: { goalId: goal.id } });
+      await this.prisma.subtask.deleteMany({ where: { goalId: goal.id } });
+      // (Если есть ещё feed, achievements — аналогично)
+      
+      await this.prisma.goal.delete({ where: { id: Number(id) } });
+      return { message: 'Цель удалена' };
+    }
 }

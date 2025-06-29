@@ -32,7 +32,7 @@ model User {
   friendsReqSent      Friendship[] @relation("friendsReqSent")
   friendsReqReceived  Friendship[] @relation("friendsReqReceived")
   groupMemberships    GroupMember[]
-
+  groupGoalProgresses GroupGoalProgress[]
   // Обратные связи для жалоб
   reportsSent      Report[] @relation("reporter")
   reportsReceived  Report[] @relation("targetUser")
@@ -159,13 +159,28 @@ model GroupMember {
 }
 
 model GroupGoal {
-  id        Int      @id @default(autoincrement())
-  group     Group    @relation(fields: [groupId], references: [id])
-  groupId   Int
-  title     String
+  id          Int           @id @default(autoincrement())
+  group       Group         @relation(fields: [groupId], references: [id])
+  groupId     Int
+  title       String
   description String?
-  createdAt DateTime @default(now())
+  createdAt   DateTime      @default(now())
+  progresses  GroupGoalProgress[]
 }
+
+model GroupGoalProgress {
+  id          Int      @id @default(autoincrement())
+  groupGoal   GroupGoal @relation(fields: [groupGoalId], references: [id])
+  groupGoalId Int
+  user        User      @relation(fields: [userId], references: [id])
+  userId      Int
+  progress    Int
+  completed   Boolean   @default(false)
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([groupGoalId, userId]) // Защита от дублей для одной цели
+}
+
 
 model Report {
   id          Int      @id @default(autoincrement())

@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Body, UseGuards, Req, ForbiddenException } from '@nestjs/common';
+import { Controller, Get, Patch, Body, UseGuards, Req, ForbiddenException, Param } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PrismaService } from '../prisma/prisma.service';
 import { Request } from 'express';
@@ -57,4 +57,13 @@ export class ProfileController {
     });
     return updatedUser;
   }
+  @Get('users/:id')
+  async getUserById(@Param('id') id: string) {
+    return this.prisma.user.findUnique({
+      where: { id: Number(id) },
+      select: { id: true, name: true, bio: true, avatarUrl: true, privacy: true },
+    });
+  }
 }
+
+

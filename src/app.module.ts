@@ -18,6 +18,7 @@ import { FeedService } from './feed/feed.service';
 import { GroupsModule } from './groups/groups.module';
 import { GroupsController } from './groups/groups.controller';
 import { GroupsService } from './groups/groups.service';
+import { UsersModule } from './users/users.module';
 
 
 @Module({
@@ -27,7 +28,8 @@ import { GroupsService } from './groups/groups.service';
     AchievementsModule, 
     FeedModule,
     FriendsModule,
-    GroupsModule
+    GroupsModule,
+    UsersModule
   ],
   controllers: [
     ProfileController, 
