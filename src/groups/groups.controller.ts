@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Param, Body, Req, UseGuards, Query, Patch, Delete } from '@nestjs/common';
+import { Controller, Post, Get, Param, Body, Req, UseGuards, Query, Patch, Delete, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { GroupsService } from './groups.service';
 import { Request } from 'express';
@@ -30,6 +30,36 @@ export class GroupsController {
   async getMyGroups(@Req() req: AuthenticatedRequest) {
     return this.groupsService.getMyGroups(req.user.userId);
   }
+  @Patch(':groupId/members/:memberId/role')
+    async changeMemberRole(
+      @Req() req: AuthenticatedRequest,
+      @Param('groupId') groupId: string,
+      @Param('memberId') memberId: string,
+      @Body() body: { role: string }
+    ) {
+      // Проверить, что вызывающий — владелец или админ группы
+      const actor = await this.prisma.groupMember.findFirst({
+        where: {
+          groupId: Number(groupId),
+          userId: req.user.userId
+        }
+      });
+      if (!actor || !(actor.role === 'owner' || actor.role === 'admin')) {
+        throw new ForbiddenException('Недостаточно прав');
+      }
+
+      // Нельзя менять роль owner или себя самого (опционально)
+      const member = await this.prisma.groupMember.findUnique({
+        where: { id: Number(memberId) }
+      });
+      if (!member) throw new NotFoundException('Участник не найден');
+      if (member.role === 'owner') throw new ForbiddenException('Нельзя менять роль владельца');
+
+      return this.prisma.groupMember.update({
+        where: { id: Number(memberId) },
+        data: { role: body.role }
+      });
+    }
 
   @Get(':groupId/members')
   async getGroupMembers(@Param('groupId') groupId: string) {
@@ -79,16 +109,62 @@ export class GroupsController {
         });
     }
     @Delete(':groupId/goals/:goalId')
-    async deleteGroupGoal(
-    @Req() req: AuthenticatedRequest,
-    @Param('groupId') groupId: string,
-    @Param('goalId') goalId: string
-    ) {
-    // (Опционально: проверить права)
-    await this.prisma.groupGoal.delete({ where: { id: Number(goalId) } });
-    return { message: 'Групповая цель удалена' };
-    }
+      async deleteGroupGoal(
+        @Req() req: AuthenticatedRequest,
+        @Param('groupId') groupId: string,
+        @Param('goalId') goalId: string
+        ) {
+        // (Опционально: проверить права)
+        await this.prisma.groupGoal.delete({ where: { id: Number(goalId) } });
+        return { message: 'Групповая цель удалена' };
+      }
+      @Get(':groupId')
+        async getGroup(@Param('groupId') groupId: string) {
+          const group = await this.prisma.group.findUnique({
+            where: { id: Number(groupId) },
+            include: {
+              members: {
+                include: {
+                  user: { select: { id: true, name: true, avatarUrl: true } }
+                }
+              },
+              goals: true
+            }
+          });
+          if (!group) throw new NotFoundException('Группа не найдена');
+          return group;
+        }
 
+      //кик из группы
+      @Delete(':groupId/members/:memberId')
+        async kickMember(
+          @Req() req: AuthenticatedRequest,
+          @Param('groupId') groupId: string,
+          @Param('memberId') memberId: string
+        ) {
+          // Проверить, что вызывающий — владелец или админ группы
+          const actor = await this.prisma.groupMember.findFirst({
+            where: {
+              groupId: Number(groupId),
+              userId: req.user.userId
+            }
+          });
+          if (!actor || !(actor.role === 'owner' || actor.role === 'admin')) {
+            throw new ForbiddenException('Недостаточно прав');
+          }
+
+          // Нельзя кикать owner-а (и, возможно, себя самого)
+          const member = await this.prisma.groupMember.findUnique({
+            where: { id: Number(memberId) }
+          });
+          if (!member) throw new NotFoundException('Участник не найден');
+          if (member.role === 'owner') throw new ForbiddenException('Нельзя кикать владельца группы');
+
+          await this.prisma.groupMember.delete({
+            where: { id: Number(memberId) }
+          });
+          return { message: 'Участник удалён из группы' };
+      }
     // Обновить свой прогресс по групповой цели
     @Patch(':groupId/goals/:goalId/progress')
     async updateMyProgress(
@@ -138,6 +214,31 @@ export class GroupsController {
         text: body.text
       }
     });
+  }
+  @Delete(':groupId/leave')
+    async leaveGroup(
+      @Req() req: AuthenticatedRequest,
+      @Param('groupId') groupId: string
+    ) {
+      // Ищем membership текущего пользователя в этой группе
+      const membership = await this.prisma.groupMember.findFirst({
+        where: {
+          groupId: Number(groupId),
+          userId: req.user.userId
+        }
+      });
+      if (!membership) throw new NotFoundException('Вы не состоите в этой группе');
+
+      // (Опционально: запретить owner-у выйти, пока не передаст права)
+      if (membership.role === 'owner') {
+        throw new ForbiddenException('Владелец не может выйти из группы, пока не передаст права другому участнику');
+      }
+
+      await this.prisma.groupMember.delete({
+        where: { id: membership.id }
+      });
+
+      return { message: 'Вы успешно покинули группу' };
   }
 
 }
