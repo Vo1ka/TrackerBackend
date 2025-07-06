@@ -1,6 +1,7 @@
 import {
   Controller, Get, Post, Patch, Delete, Param, Body, UseGuards, Req,
-  NotFoundException, ForbiddenException
+  NotFoundException, ForbiddenException,
+  Query
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PrismaService } from '../prisma/prisma.service';
@@ -35,7 +36,6 @@ export class GoalsController {
     if (body.description && !(await this.moderation.checkText(body.description))) {
       throw new ForbiddenException('Недопустимый текст в описании цели');
     }
-    
 
     const goal = await this.prisma.goal.create({
       data: {
@@ -45,8 +45,10 @@ export class GoalsController {
         privacy: body.privacy, // public/private/friends-only
         progressType: body.progressType, // quantity/days/subtasks/duration
         targetValue: body.targetValue,
+        sphere: body.sphere               // <--- вот это добавь!
       },
     });
+
     // Добавляем событие в feed
     await this.feedService.addEvent(
       req.user.userId,
@@ -59,13 +61,19 @@ export class GoalsController {
   }
 
   @Get()
-  async getGoals(@Req() req: AuthenticatedRequest) {
-    return this.prisma.goal.findMany({
-      where: { userId: req.user.userId },
-      orderBy: { createdAt: 'desc' },
-      include: { steps: true, subtasks: true },
-    });
-  }
+    async getGoals(
+      @Req() req: AuthenticatedRequest,
+      @Query('sphere') sphere?: string
+    ) {
+      const where: any = { userId: req.user.userId };
+      if (sphere) where.sphere = sphere;
+
+      return this.prisma.goal.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        include: { steps: true, subtasks: true },
+      });
+    }
 
   @Get(':id')
   async getGoal(@Req() req: AuthenticatedRequest, @Param('id') id: string) {

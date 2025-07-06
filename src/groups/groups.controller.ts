@@ -192,11 +192,15 @@ export class GroupsController {
     @Query('offset') offset = '0'
   ) {
     return this.prisma.groupMessage.findMany({
-      where: { groupId: Number(groupId) },
-      orderBy: { createdAt: 'desc' },
-      take: Number(limit),
-      skip: Number(offset)
+        where: { groupId: Number(groupId) },
+        orderBy: { createdAt: 'desc' },
+        take: Number(limit),
+        skip: Number(offset),
+        include: {
+          user: { select: { id: true, name: true, avatarUrl: true } }
+        }
     });
+
   }
 
   // Отправить сообщение в чат группы

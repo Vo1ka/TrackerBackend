@@ -53,6 +53,8 @@ model Goal {
   updatedAt    DateTime  @updatedAt
   completedAt  DateTime?
 
+  sphere       String?
+
   isFlagged    Boolean  @default(false)                  // << флаг: подозрительная цель
   flagReason   String?                                   // << причина флага
 
@@ -139,6 +141,8 @@ model Friendship {
   status     String   // pending, accepted, rejected
   createdAt  DateTime @default(now())
 }
+
+
 
 model Group {
   id          Int          @id @default(autoincrement())
