@@ -19,6 +19,9 @@ import { GroupsModule } from './groups/groups.module';
 import { GroupsController } from './groups/groups.controller';
 import { GroupsService } from './groups/groups.service';
 import { UsersModule } from './users/users.module';
+import { EventsModule } from './events/events.module';
+import { EventsService } from './events/events.service';
+import { EventsController } from './events/events.controller';
 
 
 @Module({
@@ -29,7 +32,8 @@ import { UsersModule } from './users/users.module';
     FeedModule,
     FriendsModule,
     GroupsModule,
-    UsersModule
+    UsersModule,
+    EventsModule
   ],
   controllers: [
     ProfileController, 
@@ -38,7 +42,8 @@ import { UsersModule } from './users/users.module';
     SubtasksController,
     FeedController,
     FriendsController,
-    GroupsController
+    GroupsController,
+    EventsController
   ],
   providers: [
     PrismaService, 
@@ -46,7 +51,8 @@ import { UsersModule } from './users/users.module';
     AchievementsService,
     FeedService,
     FriendsService,
-    GroupsService
+    GroupsService,
+    EventsService
   ]
 })
 export class AppModule {}

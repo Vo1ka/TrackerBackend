@@ -9,6 +9,7 @@ import { ContentModerationService } from '../common/content-moderation.service';
 import { Request } from 'express';
 import { AchievementsService } from 'src/achievements/achievements.service';
 import { FeedService } from 'src/feed/feed.service';
+import { EventsService } from 'src/events/events.service';
 
 interface AuthenticatedRequest extends Request {
   user: {
@@ -24,7 +25,8 @@ export class GoalsController {
     private readonly prisma: PrismaService,
     private readonly moderation: ContentModerationService,
     private readonly achievementsService: AchievementsService,
-    private readonly feedService: FeedService
+    private readonly feedService: FeedService,
+    private  readonly eventsService: EventsService
   ) {}
 
   @Post()
@@ -57,6 +59,14 @@ export class GoalsController {
     );
 
     await this.achievementsService.checkAndGrantAll(req.user.userId);
+    await this.eventsService.add(req.user.userId, {
+      eventType: 'create_goal',
+      goalId: goal.id,
+      sphereId: body.sphere ? undefined : undefined, // при желании пробрасывай id, если будет справочник
+      payload: { title: goal.title, sphere: goal.sphere },
+      source: 'web',
+    });
+
     return goal;
   }
 
@@ -99,6 +109,12 @@ export class GoalsController {
     if (body.description && !(await this.moderation.checkText(body.description))) {
       throw new ForbiddenException('Недопустимый текст в описании цели');
     }
+    await this.eventsService.add(req.user.userId, {
+      eventType: 'update_goal',
+      goalId: goal.id,
+      payload: { changed: Object.keys(body) },
+      source: 'web',
+    });
 
     return this.prisma.goal.update({
       where: { id: Number(id) },
@@ -123,7 +139,12 @@ export class GoalsController {
       await this.prisma.step.deleteMany({ where: { goalId: goal.id } });
       await this.prisma.subtask.deleteMany({ where: { goalId: goal.id } });
       // (Если есть ещё feed, achievements — аналогично)
-      
+      await this.eventsService.add(req.user.userId, {
+        eventType: 'delete_goal',
+        goalId: goal.id,
+        source: 'web',
+      });
+
       await this.prisma.goal.delete({ where: { id: Number(id) } });
       return { message: 'Цель удалена' };
     }
