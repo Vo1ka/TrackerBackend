@@ -62,7 +62,7 @@ export class GoalsController {
     await this.eventsService.add(req.user.userId, {
       eventType: 'create_goal',
       goalId: goal.id,
-      sphereId: body.sphere ? undefined : undefined, // при желании пробрасывай id, если будет справочник
+      sphere: body.sphere ? undefined : undefined, // при желании пробрасывай id, если будет справочник
       payload: { title: goal.title, sphere: goal.sphere },
       source: 'web',
     });
@@ -144,7 +144,7 @@ export class GoalsController {
         goalId: goal.id,
         source: 'web',
       });
-
+      
       await this.prisma.goal.delete({ where: { id: Number(id) } });
       return { message: 'Цель удалена' };
     }

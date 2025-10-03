@@ -20,18 +20,32 @@ export class AuthService {
       data: { email, password: hash, name },
     });
     
-    return { id: user.id, email: user.email, name: user.name };
+    // Генерируем JWT токен (как в login)
+    const payload = { sub: user.id, email: user.email };
+    const access_token = await this.jwtService.signAsync(payload);
+    
+    // Возвращаем токен + данные пользователя
+    return { 
+      access_token,
+      user: {
+        id: user.id, 
+        email: user.email, 
+        name: user.name 
+      }
+    };
   }
 
   // Логин
   async login(email: string, password: string) {
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user) throw new UnauthorizedException('Invalid credentials');
+    
     const passwordValid = await bcrypt.compare(password, user.password);
     if (!passwordValid) throw new UnauthorizedException('Invalid credentials');
 
     const payload = { sub: user.id, email: user.email };
     const access_token = await this.jwtService.signAsync(payload);
+    
     return { access_token };
   }
 }

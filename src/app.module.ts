@@ -22,10 +22,12 @@ import { UsersModule } from './users/users.module';
 import { EventsModule } from './events/events.module';
 import { EventsService } from './events/events.service';
 import { EventsController } from './events/events.controller';
+import { InsightsModule } from './insights/insights.module';
 
 
 @Module({
   imports: [
+    PrismaModule,
     AuthModule,
     PrismaModule,
     AchievementsModule, 
@@ -33,7 +35,8 @@ import { EventsController } from './events/events.controller';
     FriendsModule,
     GroupsModule,
     UsersModule,
-    EventsModule
+    EventsModule,
+    InsightsModule
   ],
   controllers: [
     ProfileController, 

@@ -152,7 +152,7 @@ model Event {
   payload        Json?
   clientEventId  String?   // идемпотентность с клиента
   source         String?   // web|mobile|other
-  sphereId       Int?
+  sphere       String?
   goalId         Int?
   stepId         Int?
   createdAt      DateTime  @default(now())
