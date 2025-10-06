@@ -547,43 +547,70 @@ export class AiService {
   }
 
   private checkMotivation(analytics: UserAnalyticsDto): MessageTemplate[] {
-    const messages: MessageTemplate[] = [];
+        const messages: MessageTemplate[] = [];
+        if (
+            analytics.activity.daysSinceLastStep >= 3 && 
+            analytics.activity.daysSinceLastStep < 30 &&
+            analytics.activity.totalSteps > 0 //  только если есть хоть один шаг
+        ) {
+            const urgency = analytics.activity.daysSinceLastStep >= 7 ? 4 : 3;
+            messages.push({
+            type: 'motivation',
+            priority: urgency,
+            emoji: '💪',
+            context: `Пользователь не добавлял шаги ${analytics.activity.daysSinceLastStep} дней. У него ${analytics.goals.active} активных целей. Предыдущий streak был ${analytics.activity.longestStreak} дней.`,
+            expiresInHours: 24,
+            });
+        }
 
-    if (analytics.activity.daysSinceLastStep >= 3 && analytics.activity.daysSinceLastStep < 30) {
-      const urgency = analytics.activity.daysSinceLastStep >= 7 ? 4 : 3;
-      messages.push({
-        type: 'motivation',
-        priority: urgency,
-        emoji: '💪',
-        context: `Пользователь не добавлял шаги ${analytics.activity.daysSinceLastStep} дней. У него ${analytics.goals.active} активных целей. Предыдущий streak был ${analytics.activity.longestStreak} дней.`,
-        expiresInHours: 24,
-      });
-    }
+         // Приветственное сообщение для новичков
+        if (analytics.activity.totalSteps === 0 && analytics.goals.active > 0) {
+            messages.push({
+            type: 'motivation',
+            priority: 5,
+            emoji: '🚀',
+            context: `Пользователь только что создал ${analytics.goals.active} ${analytics.goals.active === 1 ? 'цель' : 'целей'}, но ещё не добавил ни одного шага. Это первый день его пути. Дай мотивирующий совет с чего начать.`,
+            expiresInHours: 48,
+            });
+            
+            return messages; 
+        }
 
-    const stagnantGoals = analytics.recentGoals.filter(g => g.isStagnant && g.progress < 100);
-    if (stagnantGoals.length > 0) {
-      const goal = stagnantGoals[0];
-      messages.push({
-        type: 'motivation',
-        priority: 3,
-        emoji: '⏰',
-        context: `Цель "${goal.title}" без прогресса ${goal.daysSinceLastStep} дней. Прогресс: ${goal.currentValue}/${goal.targetValue} (${goal.progress.toFixed(0)}%). Осталось: ${(goal.targetValue - goal.currentValue).toFixed(0)}.`,
-        expiresInHours: 48,
-      });
-    }
 
-    if (analytics.activity.longestStreak > 5 && analytics.activity.streak === 0) {
-      messages.push({
-        type: 'motivation',
-        priority: 4,
-        emoji: '🔥',
-        context: `Рекордный streak пользователя был ${analytics.activity.longestStreak} дней, но сейчас streak обнулился. Последний шаг был ${analytics.activity.daysSinceLastStep} дней назад.`,
-        expiresInHours: 48,
-      });
-    }
+        // Стагнирующие цели (только если есть прогресс)
+        const stagnantGoals = analytics.recentGoals.filter(
+            g => g.isStagnant && g.progress < 100 && g.progress > 0 
+        );
+        
+        if (stagnantGoals.length > 0) {
+            const goal = stagnantGoals[0];
+            messages.push({
+            type: 'motivation',
+            priority: 3,
+            emoji: '⏰',
+            context: `Цель "${goal.title}" без прогресса ${goal.daysSinceLastStep} дней. Прогресс: ${goal.currentValue}/${goal.targetValue} (${goal.progress.toFixed(0)}%). Осталось: ${(goal.targetValue - goal.currentValue).toFixed(0)}.`,
+            expiresInHours: 48,
+            });
+        }
 
-    return messages;
-  }
+        // Потерянный streak (только если был streak)
+        if (
+            analytics.activity.longestStreak > 5 && 
+            analytics.activity.streak === 0 &&
+            analytics.activity.totalSteps > 0 
+        ) {
+            messages.push({
+            type: 'motivation',
+            priority: 4,
+            emoji: '🔥',
+            context: `Рекордный streak пользователя был ${analytics.activity.longestStreak} дней, но сейчас streak обнулился. Последний шаг был ${analytics.activity.daysSinceLastStep} дней назад.`,
+            expiresInHours: 48,
+            });
+        }
+
+        return messages;
+        }
+
 
   private generateRecommendations(analytics: UserAnalyticsDto): MessageTemplate[] {
     const messages: MessageTemplate[] = [];
