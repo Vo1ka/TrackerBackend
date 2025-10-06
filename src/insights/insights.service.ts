@@ -17,6 +17,19 @@ export interface BalanceInsight {
   windowDays: number;
 }
 
+interface CalendarDay {
+  date: string; // YYYY-MM-DD
+  count: number; // количество событий
+  level: number; // 0-4 (интенсивность для цвета)
+}
+
+export interface CalendarInsight {
+  days: CalendarDay[];
+  totalDays: number;
+  activeDays: number;
+  totalEvents: number;
+}
+
 @Injectable()
 export class InsightsService {
   private readonly logger = new Logger(InsightsService.name);
@@ -106,6 +119,68 @@ export class InsightsService {
       windowDays,
     };
   }
+async getCalendar(userId: number, numDays: number = 90): Promise<CalendarInsight> {
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - numDays);
+
+  // Получаем события за период
+  const events = await this.prisma.event.findMany({
+    where: {
+      userId,
+      occurredAt: { gte: startDate },
+      eventType: {
+        in: [
+          'create_goal', 'update_goal', 'complete_goal',
+          'create_step', 'complete_step',
+          'create_subtask', 'complete_subtask',
+        ],
+      },
+    },
+    select: {
+      occurredAt: true,
+    },
+    orderBy: { occurredAt: 'asc' },
+  });
+
+  // Группируем по датам
+  const dateMap = new Map<string, number>();
+  events.forEach(event => {
+    const date = new Date(event.occurredAt);
+    const dateKey = date.toISOString().split('T')[0]; // YYYY-MM-DD
+    dateMap.set(dateKey, (dateMap.get(dateKey) || 0) + 1);
+  });
+
+  // Создаём массив дней (заполняем пропуски нулями)
+  const days: CalendarDay[] = [];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  for (let i = numDays - 1; i >= 0; i--) {
+    const date = new Date(today);
+    date.setDate(date.getDate() - i);
+    const dateKey = date.toISOString().split('T')[0];
+    const count = dateMap.get(dateKey) || 0;
+
+    // Определяем уровень интенсивности (0-4)
+    let level = 0;
+    if (count > 0) level = 1;
+    if (count >= 3) level = 2;
+    if (count >= 5) level = 3;
+    if (count >= 10) level = 4;
+
+    days.push({ date: dateKey, count, level });
+  }
+
+  const activeDays = Array.from(dateMap.keys()).length;
+  const totalEvents = events.length;
+
+  return {
+    days,
+    totalDays: numDays,
+    activeDays,
+    totalEvents,
+  };
+}
 
   /**
    * Рассчитать Balance Score (энтропия Шеннона)

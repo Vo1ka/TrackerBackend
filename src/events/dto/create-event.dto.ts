@@ -5,8 +5,7 @@ import {
 
 // Список сфер
 const SPHERES = [
-  'work', 'education', 'health', 'finance', 
-  'relationships', 'hobby', 'personal_growth'
+  'work', 'education', 'hobby'
 ] as const;
 
 const EVENT_TYPES = [
@@ -38,8 +37,8 @@ export class CreateEventDto {
   clientEventId?: string;
 
   @IsOptional() 
-  @IsIn(SPHERES)
-  sphere?: typeof SPHERES[number]; 
+  @IsString() // << ИЗМЕНЕНО: убрали @IsIn, оставили просто строку
+  sphere?: string; // << ИЗМЕНЕНО: просто string вместо typeof SPHERES[number]
 
   @IsOptional() 
   @IsInt()

@@ -39,6 +39,10 @@ model User {
   reportsReceived  Report[] @relation("targetUser")
   // События
   events                Event[]
+
+  AiMessage AiMessage[]
+
+  UserPattern UserPattern[]
 }
 
 model Goal {
@@ -227,3 +231,41 @@ model Report {
   decision    String?  // action_taken, declined, etc.
 }
 
+model AiMessage {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  type      String   @db.VarChar(50)
+  priority  Int      @default(3)
+  message   String   @db.Text
+  emoji     String?  @db.VarChar(10)
+  metadata  Json     @default("{}")
+  shown     Boolean  @default(false)
+  dismissed Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+  expiresAt DateTime? @map("expires_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, shown, dismissed])
+  @@index([userId, priority, createdAt])
+  @@map("ai_messages")
+}
+
+model UserPattern {
+  userId           Int      @id @map("user_id")
+  streak           Int      @default(0)
+  longestStreak    Int      @default(0) @map("longest_streak")
+  avgStepsPerDay   Float    @default(0) @map("avg_steps_per_day")
+  mostActiveDay    String?  @map("most_active_day") @db.VarChar(20)
+  mostActiveHour   Int?     @map("most_active_hour")
+  completionRate   Float    @default(0) @map("completion_rate")
+  totalGoals       Int      @default(0) @map("total_goals")
+  activeGoals      Int      @default(0) @map("active_goals")
+  completedGoals   Int      @default(0) @map("completed_goals")
+  lastCalculated   DateTime @default(now()) @map("last_calculated")
+  data             Json     @default("{}")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_patterns")
+}

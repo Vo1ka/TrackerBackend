@@ -47,7 +47,7 @@ export class GoalsController {
         privacy: body.privacy, // public/private/friends-only
         progressType: body.progressType, // quantity/days/subtasks/duration
         targetValue: body.targetValue,
-        sphere: body.sphere               // <--- вот это добавь!
+        sphere: body.sphere               
       },
     });
 
@@ -62,7 +62,7 @@ export class GoalsController {
     await this.eventsService.add(req.user.userId, {
       eventType: 'create_goal',
       goalId: goal.id,
-      sphere: body.sphere ? undefined : undefined, // при желании пробрасывай id, если будет справочник
+      sphere: goal.sphere || undefined,
       payload: { title: goal.title, sphere: goal.sphere },
       source: 'web',
     });
@@ -144,7 +144,7 @@ export class GoalsController {
         goalId: goal.id,
         source: 'web',
       });
-      
+
       await this.prisma.goal.delete({ where: { id: Number(id) } });
       return { message: 'Цель удалена' };
     }

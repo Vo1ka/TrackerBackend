@@ -23,6 +23,7 @@ import { EventsModule } from './events/events.module';
 import { EventsService } from './events/events.service';
 import { EventsController } from './events/events.controller';
 import { InsightsModule } from './insights/insights.module';
+import { AiModule } from './ai/ai.module';
 
 
 @Module({
@@ -36,7 +37,8 @@ import { InsightsModule } from './insights/insights.module';
     GroupsModule,
     UsersModule,
     EventsModule,
-    InsightsModule
+    InsightsModule,
+    AiModule
   ],
   controllers: [
     ProfileController, 
