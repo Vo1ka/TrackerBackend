@@ -17,142 +17,153 @@ export class TeamGoalsService {
 
   // Создать командную цель
   async create(workspaceId: number, userId: number, dto: CreateTeamGoalDto) {
-    // Проверяем права (manager, admin, owner)
-    await this.workspaceService.checkRole(workspaceId, userId, [
-      'manager',
-      'admin',
-      'owner',
-    ]);
+        // Проверяем права (manager, admin, owner)
+        await this.workspaceService.checkRole(workspaceId, userId, [
+            'manager',
+            'admin',
+            'owner',
+        ]);
 
-    // Если указан owner, проверяем что он является членом workspace
-    if (dto.ownerId) {
-      const isMember = await this.workspaceService.isMember(
-        workspaceId,
-        dto.ownerId,
-      );
-      if (!isMember) {
-        throw new ForbiddenException('Owner must be a workspace member');
-      }
-    }
+        // Если указан owner, проверяем что он является членом workspace
+        if (dto.ownerId) {
+            const isMember = await this.workspaceService.isMember(
+            workspaceId,
+            dto.ownerId,
+            );
+            if (!isMember) {
+            throw new ForbiddenException('Owner must be a workspace member');
+            }
+        }
 
-    const teamGoal = await this.prisma.teamGoal.create({
-      data: {
-        workspaceId,
-        title: dto.title,
-        description: dto.description,
-        targetValue: dto.targetValue,
-        category: dto.category,
-        ownerId: dto.ownerId || userId,
-        visibility: dto.visibility || 'workspace',
-      },
-      include: {
-        owner: {
-          select: {
-            id: true,
-            name: true,
-            avatarUrl: true,
-          },
-        },
-      },
-    });
-
-    return teamGoal;
-  }
-
-  // Получить список командных целей
-  async findAll(
-    workspaceId: number,
-    userId: number,
-    filters?: {
-      status?: string;
-      category?: string;
-      ownerId?: number;
-    },
-  ) {
-    // Проверяем что пользователь является членом
-    const isMember = await this.workspaceService.isMember(workspaceId, userId);
-    if (!isMember) {
-      throw new ForbiddenException('You are not a member of this workspace');
-    }
-
-    const where: any = { workspaceId };
-
-    if (filters?.status) {
-      where.status = filters.status;
-    }
-    if (filters?.category) {
-      where.category = filters.category;
-    }
-    if (filters?.ownerId) {
-      where.ownerId = filters.ownerId;
-    }
-
-    const goals = await this.prisma.teamGoal.findMany({
-      where,
-      include: {
-        owner: {
-          select: {
-            id: true,
-            name: true,
-            avatarUrl: true,
-          },
-        },
-        contributors: {
-          include: {
-            user: {
-              select: {
+        const teamGoal = await this.prisma.teamGoal.create({
+            data: {
+            workspaceId,
+            title: dto.title,
+            description: dto.description,
+            targetValue: dto.targetValue,
+            category: dto.category,
+            ownerId: dto.ownerId || userId,
+            visibility: dto.visibility || 'workspace',
+            },
+            include: {
+            owner: {
+                select: {
                 id: true,
                 name: true,
                 avatarUrl: true,
-              },
+                },
             },
-          },
-          orderBy: { contribution: 'desc' },
-          take: 5,
-        },
-        _count: {
-          select: {
-            steps: true,
-            contributors: true,
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    // Вычисляем прогресс для каждой цели
-    const goalsWithProgress = await Promise.all(
-      goals.map(async (goal) => {
-        const totalSteps = await this.prisma.teamGoalStep.aggregate({
-          where: { teamGoalId: goal.id },
-          _sum: { value: true },
+            },
         });
 
-        const currentValue = totalSteps._sum.value || 0;
-        const progress = (currentValue / goal.targetValue) * 100;
-
+        // ✅ ДОБАВЛЕНО: Возвращаем с вычисленными полями
         return {
-          id: goal.id,
-          title: goal.title,
-          description: goal.description,
-          targetValue: goal.targetValue,
-          currentValue,
-          progress: Math.min(progress, 100),
-          category: goal.category,
-          visibility: goal.visibility,
-          status: goal.status,
-          owner: goal.owner,
-          contributors: goal.contributors,
-          stepsCount: goal._count.steps,
-          contributorsCount: goal._count.contributors,
-          createdAt: goal.createdAt,
-          completedAt: goal.completedAt,
+            ...teamGoal,
+            currentValue: 0,
+            progress: 0,
+            contributors: [],
+            stepsCount: 0,
+            contributorsCount: 0,
         };
-      }),
-    );
+    }
 
-    return goalsWithProgress;
-  }
+
+  // Получить список командных целей
+  async findAll(
+        workspaceId: number,
+        userId: number,
+        filters?: {
+            status?: string;
+            category?: string;
+            ownerId?: number;
+        },
+        ) {
+        // Проверяем что пользователь является членом
+        const isMember = await this.workspaceService.isMember(workspaceId, userId);
+        if (!isMember) {
+            throw new ForbiddenException('You are not a member of this workspace');
+        }
+
+        const where: any = { workspaceId };
+
+        if (filters?.status) {
+            where.status = filters.status;
+        }
+        if (filters?.category) {
+            where.category = filters.category;
+        }
+        if (filters?.ownerId) {
+            where.ownerId = filters.ownerId;
+        }
+
+        const goals = await this.prisma.teamGoal.findMany({
+            where,
+            include: {
+            owner: {
+                select: {
+                id: true,
+                name: true,
+                avatarUrl: true,
+                },
+            },
+            contributors: {
+                include: {
+                user: {
+                    select: {
+                    id: true,
+                    name: true,
+                    avatarUrl: true,
+                    },
+                },
+                },
+                orderBy: { contribution: 'desc' },
+                take: 5,
+            },
+            _count: {
+                select: {
+                steps: true,
+                contributors: true,
+                },
+            },
+            },
+            orderBy: { createdAt: 'desc' },
+        });
+
+        // Вычисляем прогресс для каждой цели
+        const goalsWithProgress = await Promise.all(
+            goals.map(async (goal) => {
+            const totalSteps = await this.prisma.teamGoalStep.aggregate({
+                where: { teamGoalId: goal.id },
+                _sum: { value: true },
+            });
+
+            const currentValue = totalSteps._sum.value || 0;
+            const progress = (currentValue / goal.targetValue) * 100;
+
+            return {
+                id: goal.id,
+                workspaceId: goal.workspaceId, // ✅ ДОБАВЛЕНО!
+                title: goal.title,
+                description: goal.description,
+                targetValue: goal.targetValue,
+                currentValue,
+                progress: Math.min(progress, 100),
+                category: goal.category,
+                visibility: goal.visibility,
+                status: goal.status,
+                owner: goal.owner,
+                contributors: goal.contributors,
+                stepsCount: goal._count.steps,
+                contributorsCount: goal._count.contributors,
+                createdAt: goal.createdAt,
+                completedAt: goal.completedAt,
+            };
+            }),
+        );
+
+        return goalsWithProgress;
+    }
+
 
   // Получить детали командной цели
   async findOne(goalId: number, userId: number) {

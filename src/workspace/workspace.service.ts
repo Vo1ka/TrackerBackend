@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateWorkspaceDto } from './dto/create-workspace.dto';
 import { UpdateWorkspaceDto } from './dto/update-workspace.dto';
 
+
 @Injectable()
 export class WorkspaceService {
   constructor(private prisma: PrismaService) {}
@@ -30,7 +31,7 @@ export class WorkspaceService {
         description: dto.description,
         members: {
           create: {
-            userId,
+            userId,  // ← Используем напрямую userId
             role: 'owner',
           },
         },
