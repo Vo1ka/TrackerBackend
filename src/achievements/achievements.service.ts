@@ -1,211 +1,452 @@
-import { Injectable, Logger } from '@nestjs/common';
+// src/achievements/achievements.service.ts
+
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { FeedService } from '../feed/feed.service';
-import { EventsService } from '../events/events.service';
 
 interface AchievementRequirement {
-  goalsCreated?: number;
-  streak?: number;
-  friendsAdded?: number;
-  // можно добавить любые новые свойства
+  count?: number;
+  days?: number;
+  sphere?: string;
+  position?: number;
+  time?: string;
+  weekend?: boolean;
 }
 
 @Injectable()
 export class AchievementsService {
-  private readonly logger = new Logger(AchievementsService.name);
+  constructor(private prisma: PrismaService) {}
 
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly feedService: FeedService,
-    private readonly eventsService: EventsService, // << ДОБАВЛЕНО
-  ) {}
+  // ==========================================
+  // ОСНОВНЫЕ МЕТОДЫ
+  // ==========================================
 
   /**
-   * Получить все достижения пользователя
+   * Получить достижения пользователя (только разблокированные)
    */
   async getUserAchievements(userId: number) {
-    return this.prisma.achievementOnUser.findMany({
+    console.log('📋 getUserAchievements - userId:', userId);
+
+    const userAchievements = await this.prisma.achievementOnUser.findMany({
       where: { userId },
-      include: { achievement: true },
-      orderBy: { achievedAt: 'desc' },
+      include: {
+        achievement: true,
+      },
+      orderBy: {
+        achievedAt: 'desc',
+      },
     });
+
+    console.log('✅ Found user achievements:', userAchievements.length);
+    return userAchievements;
   }
 
   /**
-   * Получить все доступные достижения (справочник)
+   * Получить ВСЕ достижения (unlocked + locked)
    */
-  async getAllAchievements() {
-    return this.prisma.achievement.findMany({
+  async getAllAchievements(userId: number) {
+    console.log('📋 getAllAchievements - userId:', userId);
+
+    // Получаем разблокированные достижения пользователя
+    const unlocked = await this.getUserAchievements(userId);
+
+    // Получаем все достижения из справочника
+    const allAchievements = await this.prisma.achievement.findMany({
       orderBy: { id: 'asc' },
     });
+
+    console.log('📊 All achievements in DB:', allAchievements.length);
+
+    // Находим заблокированные
+    const unlockedIds = new Set(unlocked.map((ua) => ua.achievementId));
+    const locked = allAchievements.filter((a) => !unlockedIds.has(a.id));
+
+    console.log('✅ Unlocked:', unlocked.length, 'Locked:', locked.length);
+
+    return {
+      unlocked,
+      locked,
+    };
   }
 
+  // ==========================================
+  // ПРОВЕРКА И ВЫДАЧА ДОСТИЖЕНИЙ
+  // ==========================================
+
   /**
-   * Универсальная проверка и выдача достижений
+   * Проверяет все условия достижений и выдаёт новые
    */
-  async checkAndGrantAll(userId: number) {
+  async checkAndGrantAll(userId: number): Promise<string[]> {
+    console.log('🏆 Checking achievements for user:', userId);
+
+    const grantedCodes: string[] = [];
+
     try {
-      const allAchievements = await this.prisma.achievement.findMany();
+      // Получаем уже полученные достижения
       const userAchievements = await this.prisma.achievementOnUser.findMany({
         where: { userId },
         select: { achievementId: true },
       });
-      const alreadyHave = new Set(userAchievements.map(a => a.achievementId));
+      const unlockedIds = new Set(userAchievements.map((ua) => ua.achievementId));
 
-      // Считаем метрики один раз
-      const [goalsCount, friendsCount, user] = await Promise.all([
-        this.prisma.goal.count({ where: { userId } }),
-        this.prisma.friendship.count({
-          where: {
-            status: 'accepted',
-            OR: [{ requesterId: userId }, { addresseeId: userId }],
-          },
-        }),
-        this.prisma.user.findUnique({ 
-          where: { id: userId },
-          select: { currentStreak: true },
-        }),
-      ]);
+      // Получаем все достижения
+      const allAchievements = await this.prisma.achievement.findMany();
 
-      const currentStreak = user?.currentStreak ?? 0;
-
-      this.logger.log(
-        `Checking achievements for user ${userId}: goals=${goalsCount}, friends=${friendsCount}, streak=${currentStreak}`
-      );
-
-      let grantedCount = 0;
-
+      // Проверяем каждое достижение
       for (const achievement of allAchievements) {
-        if (alreadyHave.has(achievement.id)) continue;
+        // Пропускаем уже полученные
+        if (unlockedIds.has(achievement.id)) continue;
 
-        const req = achievement.requirement as AchievementRequirement;
-        let shouldGrant = false;
+        // Проверяем условие
+        const isGranted = await this.checkAchievementCondition(userId, achievement);
 
-        // Проверка условий
-        if (req?.goalsCreated && goalsCount >= req.goalsCreated) {
-          shouldGrant = true;
-        } else if (req?.streak && currentStreak >= req.streak) {
-          shouldGrant = true;
-        } else if (req?.friendsAdded && friendsCount >= req.friendsAdded) {
-          shouldGrant = true;
-        }
-
-        // Выдача достижения
-        if (shouldGrant) {
+        if (isGranted) {
+          // Выдаём достижение
           await this.grantAchievement(userId, achievement.id);
-          grantedCount++;
+          grantedCodes.push(achievement.code);
+          console.log('🎉 Achievement granted:', achievement.code);
         }
       }
 
-      this.logger.log(`Granted ${grantedCount} new achievements to user ${userId}`);
-
-      return { granted: grantedCount };
+      console.log('✅ Achievements check completed. Granted:', grantedCodes.length);
     } catch (error) {
-      this.logger.error(
-        `Failed to check achievements for user ${userId}`,
-        error.stack
-      );
-      // Не бросаем ошибку, чтобы не ломать основной флоу
-      return { granted: 0, error: error.message };
+      console.error('❌ Error checking achievements:', error);
+    }
+
+    return grantedCodes;
+  }
+
+  /**
+   * Проверяет условие конкретного достижения
+   */
+  private async checkAchievementCondition(
+    userId: number,
+    achievement: any,
+  ): Promise<boolean> {
+    const { type, requirement } = achievement;
+
+    // Если нет требований, не выдаём
+    if (!requirement) {
+      console.warn('⚠️ Achievement has no requirement:', achievement.code);
+      return false;
+    }
+
+    try {
+      switch (type) {
+        case 'goal_count':
+          return await this.checkGoalCount(userId, requirement as AchievementRequirement);
+
+        case 'completion':
+          return await this.checkCompletion(userId, requirement as AchievementRequirement);
+
+        case 'streak':
+          return await this.checkStreak(userId, requirement as AchievementRequirement);
+
+        case 'sphere_completion':
+          return await this.checkSphereCompletion(userId, requirement as AchievementRequirement);
+
+        case 'leaderboard':
+          // TODO: Реализовать когда будет лидерборд
+          return false;
+
+        case 'special':
+          return await this.checkSpecial(userId, requirement as AchievementRequirement);
+
+        default:
+          console.warn('⚠️ Unknown achievement type:', type);
+          return false;
+      }
+    } catch (error) {
+      console.error('❌ Error checking condition for achievement:', achievement.code, error);
+      return false;
     }
   }
 
   /**
-   * Выдать конкретное достижение пользователю
-   * (с защитой от дублей, событиями и фидом)
+   * Выдаёт достижение пользователю
    */
   private async grantAchievement(userId: number, achievementId: number) {
     try {
-      // Проверяем, что ещё не выдано (защита от race condition)
-      const existing = await this.prisma.achievementOnUser.findFirst({
-        where: { userId, achievementId },
+      await this.prisma.achievementOnUser.create({
+        data: {
+          userId,
+          achievementId,
+          achievedAt: new Date(),
+        },
       });
-
-      if (existing) {
-        this.logger.warn(
-          `Achievement ${achievementId} already granted to user ${userId}`
-        );
-        return existing;
-      }
-
-      // Получаем данные достижения
-      const achievement = await this.prisma.achievement.findUnique({
-        where: { id: achievementId },
-      });
-
-      if (!achievement) {
-        this.logger.error(`Achievement ${achievementId} not found`);
-        return null;
-      }
-
-      // Выдаём достижение (транзакция не нужна, т.к. операции независимы)
-      const granted = await this.prisma.achievementOnUser.create({
-        data: { userId, achievementId },
-      });
-
-      this.logger.log(
-        `🏆 Achievement unlocked: ${achievement.code} for user ${userId}`
-      );
-
-      // Добавляем в ленту (best-effort, не критично)
-      try {
-        await this.feedService.addEvent(userId, 'achievement_unlocked', {
-          achievementId: achievement.id,
-          code: achievement.code,
-          title: achievement.title,
-        });
-      } catch (error) {
-        this.logger.warn(`Failed to add feed event: ${error.message}`);
-      }
-
-      // Отправляем событие в Event API (для аналитики)
-      try {
-        await this.eventsService.add(userId, {
-          eventType: 'unlock_achievement',
-          payload: {
-            achievementId: achievement.id,
-            code: achievement.code,
-            title: achievement.title,
-            type: achievement.type,
-          },
-          source: 'service',
-        });
-      } catch (error) {
-        this.logger.warn(`Failed to track event: ${error.message}`);
-      }
-
-      return granted;
+      console.log('✅ Achievement granted:', achievementId);
     } catch (error) {
-      this.logger.error(
-        `Failed to grant achievement ${achievementId} to user ${userId}`,
-        error.stack
-      );
-      return null;
+      console.error('❌ Error granting achievement:', error);
+    }
+  }
+
+  // ==========================================
+  // ПРОВЕРКИ УСЛОВИЙ
+  // ==========================================
+
+  /**
+   * Проверка: создано N целей
+   */
+  private async checkGoalCount(userId: number, requirement: AchievementRequirement): Promise<boolean> {
+    if (!requirement.count) return false;
+
+    const count = await this.prisma.goal.count({
+      where: { userId },
+    });
+
+    console.log(`📊 Goal count: ${count} / ${requirement.count}`);
+    return count >= requirement.count;
+  }
+
+  /**
+   * Проверка: завершено N целей
+   */
+  private async checkCompletion(userId: number, requirement: AchievementRequirement): Promise<boolean> {
+    if (!requirement.count) return false;
+
+    const count = await this.prisma.goal.count({
+      where: {
+        userId,
+        completedAt: { not: null },
+      },
+    });
+
+    console.log(`✅ Completed goals: ${count} / ${requirement.count}`);
+    return count >= requirement.count;
+  }
+
+  /**
+   * Проверка: стрик N дней
+   */
+  private async checkStreak(userId: number, requirement: AchievementRequirement): Promise<boolean> {
+    if (!requirement.days) return false;
+
+    // Получаем текущий стрик из User
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { currentStreak: true },
+    });
+
+    const currentStreak = user?.currentStreak || 0;
+    console.log(`🔥 Current streak: ${currentStreak} / ${requirement.days}`);
+    
+    return currentStreak >= requirement.days;
+  }
+
+  /**
+   * Проверка: завершено N целей в определённой сфере
+   */
+  private async checkSphereCompletion(userId: number, requirement: AchievementRequirement): Promise<boolean> {
+    if (!requirement.count || !requirement.sphere) return false;
+
+    const count = await this.prisma.goal.count({
+      where: {
+        userId,
+        sphere: requirement.sphere,
+        completedAt: { not: null },
+      },
+    });
+
+    console.log(`🎯 Sphere ${requirement.sphere} completed: ${count} / ${requirement.count}`);
+    return count >= requirement.count;
+  }
+
+  /**
+   * Проверка: специальные условия
+   */
+  private async checkSpecial(userId: number, requirement: AchievementRequirement): Promise<boolean> {
+    // Ранняя пташка (шаг до 6:00)
+    if (requirement.time === 'before_6am') {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      const earlyStep = await this.prisma.step.findFirst({
+        where: {
+          goal: { userId },
+          createdAt: {
+            gte: today,
+            lt: new Date(today.getTime() + 6 * 60 * 60 * 1000), // До 6:00
+          },
+        },
+      });
+
+      console.log('🌅 Early bird check:', !!earlyStep);
+      return !!earlyStep;
+    }
+
+    // Ночная сова (шаг после 23:00)
+    if (requirement.time === 'after_11pm') {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const lateStep = await this.prisma.step.findFirst({
+        where: {
+          goal: { userId },
+          createdAt: {
+            gte: new Date(today.getTime() + 23 * 60 * 60 * 1000), // После 23:00
+          },
+        },
+      });
+
+      console.log('🦉 Night owl check:', !!lateStep);
+      return !!lateStep;
+    }
+
+    // Воин выходного дня
+    if (requirement.weekend) {
+      const weekendGoal = await this.prisma.goal.findFirst({
+        where: {
+          userId,
+          completedAt: { not: null },
+        },
+      });
+
+      if (weekendGoal?.completedAt) {
+        const day = new Date(weekendGoal.completedAt).getDay();
+        const isWeekend = day === 0 || day === 6; // 0 = воскресенье, 6 = суббота
+        console.log('🎮 Weekend warrior check:', isWeekend);
+        return isWeekend;
+      }
+    }
+
+    return false;
+  }
+
+  // ==========================================
+  // ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ
+  // ==========================================
+
+  /**
+   * Проверить конкретное достижение по коду
+   */
+  async checkAndGrantByCode(userId: number, code: string): Promise<boolean> {
+    const achievement = await this.prisma.achievement.findUnique({
+      where: { code },
+    });
+
+    if (!achievement) {
+      console.warn('⚠️ Achievement not found:', code);
+      return false;
+    }
+
+    // Проверяем что ещё не получено
+    const existing = await this.prisma.achievementOnUser.findFirst({
+      where: {
+        userId,
+        achievementId: achievement.id,
+      },
+    });
+
+    if (existing) {
+      console.log('ℹ️ Achievement already granted:', code);
+      return false; // Уже получено
+    }
+
+    // Проверяем условие
+    const isGranted = await this.checkAchievementCondition(userId, achievement);
+
+    if (isGranted) {
+      await this.grantAchievement(userId, achievement.id);
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Получить прогресс для достижения (для UI)
+   */
+  async getAchievementProgress(userId: number, achievementId: number): Promise<number> {
+    const achievement = await this.prisma.achievement.findUnique({
+      where: { id: achievementId },
+    });
+
+    if (!achievement || !achievement.requirement) return 0;
+
+    const { type, requirement } = achievement;
+    const req = requirement as AchievementRequirement;
+
+    try {
+      switch (type) {
+        case 'goal_count': {
+          if (!req.count) return 0;
+          const count = await this.prisma.goal.count({ where: { userId } });
+          return Math.min(100, Math.round((count / req.count) * 100));
+        }
+
+        case 'completion': {
+          if (!req.count) return 0;
+          const count = await this.prisma.goal.count({
+            where: { userId, completedAt: { not: null } },
+          });
+          return Math.min(100, Math.round((count / req.count) * 100));
+        }
+
+        case 'streak': {
+          if (!req.days) return 0;
+          const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+            select: { currentStreak: true },
+          });
+          const currentStreak = user?.currentStreak || 0;
+          return Math.min(100, Math.round((currentStreak / req.days) * 100));
+        }
+
+        case 'sphere_completion': {
+          if (!req.count || !req.sphere) return 0;
+          const count = await this.prisma.goal.count({
+            where: {
+              userId,
+              sphere: req.sphere,
+              completedAt: { not: null },
+            },
+          });
+          return Math.min(100, Math.round((count / req.count) * 100));
+        }
+
+        default:
+          return 0;
+      }
+    } catch (error) {
+      console.error('❌ Error calculating progress:', error);
+      return 0;
     }
   }
 
   /**
-   * Получить прогресс по достижениям (для UI)
+   * Получить статистику достижений пользователя
    */
-  async getAchievementProgress(userId: number) {
-    const [goalsCount, friendsCount, user] = await Promise.all([
-      this.prisma.goal.count({ where: { userId } }),
-      this.prisma.friendship.count({
-        where: {
-          status: 'accepted',
-          OR: [{ requesterId: userId }, { addresseeId: userId }],
-        },
-      }),
-      this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { currentStreak: true },
-      }),
+  async getUserAchievementStats(userId: number) {
+    const [total, unlocked] = await Promise.all([
+      this.prisma.achievement.count(),
+      this.prisma.achievementOnUser.count({ where: { userId } }),
     ]);
 
+    const progress = total > 0 ? Math.round((unlocked / total) * 100) : 0;
+
     return {
-      goalsCreated: goalsCount,
-      friendsAdded: friendsCount,
-      currentStreak: user?.currentStreak ?? 0,
+      total,
+      unlocked,
+      locked: total - unlocked,
+      progress,
     };
+  }
+
+  /**
+   * Получить последние N достижений пользователя
+   */
+  async getRecentAchievements(userId: number, limit: number = 5) {
+    return this.prisma.achievementOnUser.findMany({
+      where: { userId },
+      include: {
+        achievement: true,
+      },
+      orderBy: {
+        achievedAt: 'desc',
+      },
+      take: limit,
+    });
   }
 }
