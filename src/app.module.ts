@@ -15,15 +15,13 @@ import { FriendsModule } from './friends/friends.module';
 import { FriendsController } from './friends/friends.controller';
 import { FriendsService } from './friends/friends.service';
 import { FeedService } from './feed/feed.service';
-import { GroupsModule } from './groups/groups.module';
-import { GroupsController } from './groups/groups.controller';
-import { GroupsService } from './groups/groups.service';
 import { UsersModule } from './users/users.module';
 import { EventsModule } from './events/events.module';
 import { EventsService } from './events/events.service';
 import { EventsController } from './events/events.controller';
 import { InsightsModule } from './insights/insights.module';
 import { AiModule } from './ai/ai.module';
+import { WorkspaceModule } from './workspace/workspace.module';
 
 
 @Module({
@@ -34,11 +32,11 @@ import { AiModule } from './ai/ai.module';
     AchievementsModule, 
     FeedModule,
     FriendsModule,
-    GroupsModule,
     UsersModule,
     EventsModule,
     InsightsModule,
-    AiModule
+    AiModule,
+    WorkspaceModule
   ],
   controllers: [
     ProfileController, 
@@ -47,7 +45,6 @@ import { AiModule } from './ai/ai.module';
     SubtasksController,
     FeedController,
     FriendsController,
-    GroupsController,
     EventsController
   ],
   providers: [
@@ -56,7 +53,6 @@ import { AiModule } from './ai/ai.module';
     AchievementsService,
     FeedService,
     FriendsService,
-    GroupsService,
     EventsService
   ]
 })

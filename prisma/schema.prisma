@@ -1,4 +1,3 @@
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,38 +10,44 @@ datasource db {
 model User {
   id           Int        @id @default(autoincrement())
   email        String     @unique
-  isBlocked      Boolean  @default(false)
-  blockReason    String?
+  isBlocked    Boolean    @default(false)
+  blockReason  String?
   password     String
   name         String?
   bio          String?
   avatarUrl    String?
-  privacy      String?     // public, private, friends-only
+  privacy      String?    // public, private, friends-only
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
   // Стрики
-  currentStreak  Int?     // текущий стрик
-  longestStreak  Int?     // максимальный стрик
+  currentStreak  Int?
+  longestStreak  Int?
 
-  // Связи
+  // Личные цели
   goals        Goal[]
   achievements AchievementOnUser[]
   feedEvents   FeedEvent[]
+  
+  // Социальные связи (оставляем для будущего)
   friendsReqSent      Friendship[] @relation("friendsReqSent")
   friendsReqReceived  Friendship[] @relation("friendsReqReceived")
-  groupMemberships    GroupMember[]
-  groupGoalProgresses GroupGoalProgress[]
-  messages    GroupMessage[]
-  // Обратные связи для жалоб
+  
+  // 🆕 WORKSPACE: Корпоративные связи
+  workspaceMemberships WorkspaceMember[]
+  ownedTeamGoals       TeamGoal[] @relation("TeamGoalOwner")
+  teamGoalContributions TeamGoalContributor[]
+  teamGoalSteps        TeamGoalStep[]
+  sentInvites          WorkspaceInvite[]
+  workspaceMessages    WorkspaceMessage[]
+  
+  // Жалобы
   reportsSent      Report[] @relation("reporter")
   reportsReceived  Report[] @relation("targetUser")
-  // События
-  events                Event[]
-
-  AiMessage AiMessage[]
-
-  UserPattern UserPattern[]
+  
+  events       Event[]
+  aiMessages   AiMessage[]
+  userPattern  UserPattern?
 }
 
 model Goal {
@@ -53,21 +58,19 @@ model Goal {
   description  String?
   privacy      String?   // public, private, friends-only
   progressType String    // quantity, days, subtasks, duration
-  targetValue  Int?      // целевое значение для количественных целей
+  targetValue  Int?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   completedAt  DateTime?
-
   sphere       String?
 
-  isFlagged    Boolean  @default(false)                  // << флаг: подозрительная цель
-  flagReason   String?                                   // << причина флага
+  isFlagged    Boolean  @default(false)
+  flagReason   String?
 
   steps        Step[]
   subtasks     Subtask[]
   template     GoalTemplate? @relation(fields: [templateId], references: [id])
   templateId   Int?
-  // Обратные связи для жалоб
   reports      Report[]
 }
 
@@ -75,11 +78,9 @@ model Step {
   id        Int      @id @default(autoincrement())
   goal      Goal     @relation(fields: [goalId], references: [id])
   goalId    Int
-
-  isFlagged    Boolean  @default(false)                  // << флаг: подозрительная цель
-  flagReason   String?                                   // << причина флага
-
-  value     Int?     // для progressType=quantity
+  isFlagged Boolean  @default(false)
+  flagReason String?
+  value     Int?
   note      String?
   createdAt DateTime @default(now())
 }
@@ -88,10 +89,8 @@ model Subtask {
   id        Int      @id @default(autoincrement())
   goal      Goal     @relation(fields: [goalId], references: [id])
   goalId    Int
-
-  isFlagged    Boolean  @default(false)                  // << флаг: подозрительная цель
-  flagReason   String?                                   // << причина флага
-
+  isFlagged Boolean  @default(false)
+  flagReason String?
   title     String
   completed Boolean  @default(false)
 }
@@ -101,7 +100,6 @@ model GoalTemplate {
   title       String
   description String?
   category    String
-  // Можно добавить дефолтные шаги, параметры
   goals       Goal[]
 }
 
@@ -111,9 +109,8 @@ model Achievement {
   title       String
   description String
   iconUrl     String?
-  type        String   // <-- вот это обязательно!
-  requirement Json?    // <-- и это, если используешь requirement
-
+  type        String
+  requirement Json?
   users       AchievementOnUser[]
 }
 
@@ -124,111 +121,182 @@ model AchievementOnUser {
   achievement     Achievement  @relation(fields: [achievementId], references: [id])
   achievementId   Int
   achievedAt      DateTime     @default(now())
-  progress        Int?         // например, если ачивка с прогрессом
+  progress        Int?
 }
 
 model FeedEvent {
   id        Int      @id @default(autoincrement())
   user      User     @relation(fields: [userId], references: [id])
   userId    Int
-  type      String   // goal_created, goal_completed, achievement_unlocked и т.д.
-  data      Json?    // дополнительные данные (например, id цели)
+  type      String
+  data      Json?
   createdAt DateTime @default(now())
 }
 
 model Friendship {
-  id         Int     @id @default(autoincrement())
-  requester  User    @relation("friendsReqSent", fields: [requesterId], references: [id])
+  id          Int      @id @default(autoincrement())
+  requester   User     @relation("friendsReqSent", fields: [requesterId], references: [id])
   requesterId Int
-  addressee  User    @relation("friendsReqReceived", fields: [addresseeId], references: [id])
+  addressee   User     @relation("friendsReqReceived", fields: [addresseeId], references: [id])
   addresseeId Int
-
-  status     String   // pending, accepted, rejected
-  createdAt  DateTime @default(now())
+  status      String   // pending, accepted, rejected
+  createdAt   DateTime @default(now())
 }
 
 model Event {
-  id             String    @id @default(uuid())
-  user           User      @relation(fields: [userId], references: [id])
-  userId         Int
-  eventType      String
-  occurredAt     DateTime  @default(now())
-  payload        Json?
-  clientEventId  String?   // идемпотентность с клиента
-  source         String?   // web|mobile|other
-  sphere       String?
-  goalId         Int?
-  stepId         Int?
-  createdAt      DateTime  @default(now())
-
+  id            String    @id @default(uuid())
+  user          User      @relation(fields: [userId], references: [id])
+  userId        Int
+  eventType     String
+  occurredAt    DateTime  @default(now())
+  payload       Json?
+  clientEventId String?
+  source        String?
+  sphere        String?
+  goalId        Int?
+  stepId        Int?
+  createdAt     DateTime  @default(now())
 }
 
-model Group {
-  id          Int          @id @default(autoincrement())
-  title       String
+// ==========================================
+// 🆕 WORKSPACE MODELS (B2B)
+// ==========================================
+
+model Workspace {
+  id          Int       @id @default(autoincrement())
+  name        String
+  slug        String    @unique
   description String?
-  createdAt   DateTime     @default(now())
-  messages    GroupMessage[]
-  members     GroupMember[]
-  goals       GroupGoal[]
-}
-
-model GroupMember {
-  id        Int      @id @default(autoincrement())
-  group     Group    @relation(fields: [groupId], references: [id])
-  groupId   Int
-  user      User     @relation(fields: [userId], references: [id])
-  userId    Int
-  role      String   // member, admin, owner
-  joinedAt  DateTime @default(now())
-}
-
-model GroupGoal {
-  id          Int           @id @default(autoincrement())
-  group       Group         @relation(fields: [groupId], references: [id])
-  groupId     Int
-  title       String
-  description String?
-  createdAt   DateTime      @default(now())
-  progresses  GroupGoalProgress[]
-}
-
-model GroupGoalProgress {
-  id          Int      @id @default(autoincrement())
-  groupGoal   GroupGoal @relation(fields: [groupGoalId], references: [id])
-  groupGoalId Int
-  user        User      @relation(fields: [userId], references: [id])
-  userId      Int
-  progress    Int
-  completed   Boolean   @default(false)
+  plan        String    @default("free") // free, team, enterprise
+  settings    Json      @default("{}")
+  createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  @@unique([groupGoalId, userId]) // Защита от дублей для одной цели
+  members     WorkspaceMember[]
+  teamGoals   TeamGoal[]
+  messages    WorkspaceMessage[]
+  invites     WorkspaceInvite[]
+
+  @@map("workspaces")
 }
 
-model GroupMessage {
-  id        Int      @id @default(autoincrement())
-  group     Group    @relation(fields: [groupId], references: [id])
-  groupId   Int
-  user      User     @relation(fields: [userId], references: [id])
-  userId    Int
-  text      String
-  createdAt DateTime @default(now())
+model WorkspaceMember {
+  id          Int       @id @default(autoincrement())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceId Int       @map("workspace_id")
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      Int       @map("user_id")
+  role        String    // member, manager, admin, owner
+  position    String?   // должность
+  joinedAt    DateTime  @default(now()) @map("joined_at")
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+  @@map("workspace_members")
 }
 
+model TeamGoal {
+  id          Int       @id @default(autoincrement())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceId Int       @map("workspace_id")
+  title       String
+  description String?
+  targetValue Int       @map("target_value")
+  category    String?
+  owner       User?     @relation("TeamGoalOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  ownerId     Int?      @map("owner_id")
+  visibility  String    @default("workspace") // workspace, team, private
+  status      String    @default("active") // active, completed, archived
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  completedAt DateTime? @map("completed_at")
+
+  contributors TeamGoalContributor[]
+  steps        TeamGoalStep[]
+
+  @@index([workspaceId])
+  @@index([ownerId])
+  @@map("team_goals")
+}
+
+model TeamGoalContributor {
+  id           Int       @id @default(autoincrement())
+  teamGoal     TeamGoal  @relation(fields: [teamGoalId], references: [id], onDelete: Cascade)
+  teamGoalId   Int       @map("team_goal_id")
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId       Int       @map("user_id")
+  contribution Int       @default(0)
+
+  @@unique([teamGoalId, userId])
+  @@index([userId])
+  @@map("team_goal_contributors")
+}
+
+model TeamGoalStep {
+  id         Int       @id @default(autoincrement())
+  teamGoal   TeamGoal  @relation(fields: [teamGoalId], references: [id], onDelete: Cascade)
+  teamGoalId Int       @map("team_goal_id")
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     Int       @map("user_id")
+  value      Int
+  note       String?
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@index([teamGoalId])
+  @@index([userId])
+  @@map("team_goal_steps")
+}
+
+model WorkspaceInvite {
+  id          Int       @id @default(autoincrement())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceId Int       @map("workspace_id")
+  email       String
+  role        String    @default("member")
+  token       String    @unique
+  inviter     User      @relation(fields: [invitedBy], references: [id], onDelete: Cascade)
+  invitedBy   Int       @map("invited_by")
+  expiresAt   DateTime  @map("expires_at")
+  acceptedAt  DateTime? @map("accepted_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@index([email])
+  @@index([token])
+  @@map("workspace_invites")
+}
+
+model WorkspaceMessage {
+  id          Int       @id @default(autoincrement())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceId Int       @map("workspace_id")
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      Int       @map("user_id")
+  text        String
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@index([workspaceId])
+  @@map("workspace_messages")
+}
+
+// ==========================================
+// СТАРЫЕ МОДЕЛИ (оставляем, но не используем пока)
+// ==========================================
+
+// Можно удалить Group, GroupMember, GroupGoal, GroupGoalProgress, GroupMessage
+// Или оставить закомментированными для возможного возврата социализации
 
 model Report {
-  id          Int      @id @default(autoincrement())
-  createdAt   DateTime @default(now())
-  reporter    User     @relation("reporter", fields: [reporterId], references: [id])
-  reporterId  Int
-  targetUser  User?    @relation("targetUser", fields: [targetUserId], references: [id])
-  targetUserId Int?
+  id            Int      @id @default(autoincrement())
+  createdAt     DateTime @default(now())
+  reporter      User     @relation("reporter", fields: [reporterId], references: [id])
+  reporterId    Int
+  targetUser    User?    @relation("targetUser", fields: [targetUserId], references: [id])
+  targetUserId  Int?
   targetGoal    Goal?    @relation(fields: [targetGoalId], references: [id])
   targetGoalId  Int?
-  reason      String
-  status      String   // open, in_review, closed
-  decision    String?  // action_taken, declined, etc.
+  reason        String
+  status        String
+  decision      String?
 }
 
 model AiMessage {
