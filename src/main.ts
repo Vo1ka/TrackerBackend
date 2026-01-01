@@ -14,7 +14,8 @@ async function bootstrap() {
     origin: ['http://localhost:5173', 
       'http://localhost:3000',
       'https://stay-mot-beta.vercel.app/',
-      'https://trackerbackend-so26.onrender.com'
+      'https://trackerbackend-so26.onrender.com',
+      'https://stay-mot-beta-6zzb4xmne-vo1kas-projects.vercel.app/'
     ], // сюда добавь адреса фронта, с которых будут запросы
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
      allowedHeaders: [
