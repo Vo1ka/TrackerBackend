@@ -12,7 +12,10 @@ async function bootstrap() {
   
   app.enableCors({
     origin: ['http://localhost:5173', 
-      'http://localhost:3000'], // сюда добавь адреса фронта, с которых будут запросы
+      'http://localhost:3000',
+      'https://stay-mot-beta.vercel.app/',
+      'https://trackerbackend-so26.onrender.com'
+    ], // сюда добавь адреса фронта, с которых будут запросы
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
      allowedHeaders: [
       'Content-Type',
