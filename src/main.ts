@@ -14,7 +14,15 @@ async function bootstrap() {
     origin: ['http://localhost:5173', 
       'http://localhost:3000'], // сюда добавь адреса фронта, с которых будут запросы
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+     allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'Cache-Control',      // ← ДОБАВЬ
+      'Pragma',             // ← ДОБАВЬ
+      'Expires',            // ← ДОБАВЬ
+      'X-Requested-With',
+    ],
+
     credentials: true, // если используешь куки или авторизацию с credentials
   });
   console.log('Serving static from:', join(__dirname, '..', 'uploads'));

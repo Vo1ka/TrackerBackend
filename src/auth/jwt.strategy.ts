@@ -18,10 +18,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   async validate(payload: any) {
     console.log('🔑 JWT Payload validated:', { sub: payload.sub, email: payload.email });
     
-    // ✅ ИСПРАВЛЕНИЕ: возвращаем 'id' вместо 'userId'
     return { 
-      id: payload.sub,        // ← Теперь req.user.id будет работать
-      userId: payload.sub,    // ← Для обратной совместимости (если где-то используется)
+      id: payload.sub,        
+      userId: payload.sub,    
       email: payload.email 
     };
   }

@@ -1,16 +1,18 @@
+// src/goals/steps.controller.ts
+
 import {
-  Controller, Post, Delete, Param, Body, UseGuards, Req, NotFoundException, ForbiddenException
+  Controller, Post, Delete, Param, Body, UseGuards, Req, 
+  NotFoundException, ForbiddenException
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PrismaService } from '../prisma/prisma.service';
 import { ContentModerationService } from '../common/content-moderation.service';
 import { AchievementsService } from '../achievements/achievements.service';
 import { EventsService } from '../events/events.service';
-import { Request } from 'express';
 
 interface AuthenticatedRequest extends Request {
   user: {
-    userId: number;
+    userId: number;  // ✅ ПРАВИЛЬНО
     email: string;
   };
 }
@@ -31,12 +33,14 @@ export class StepsController {
     @Param('goalId') goalId: string,
     @Body() body: { value?: number; note?: string }
   ) {
-    // Модерация note
+    console.log('➕ Adding step to goal:', goalId, 'for user:', req.user.userId);
+
+    // Модерация
     if (body.note && !(await this.moderation.checkText(body.note))) {
       throw new ForbiddenException('Недопустимый текст в комментарии');
     }
 
-    // Получаем цель для проверки доступа и sphere
+    // Получаем цель
     const goal = await this.prisma.goal.findUnique({
       where: { id: Number(goalId) },
     });
@@ -58,15 +62,17 @@ export class StepsController {
       },
     });
 
+    console.log('✅ Step created:', step.id);
+
     // Проверяем достижения
     await this.achievementsService.checkAndGrantAll(req.user.userId);
 
-    // Отправляем событие
+    // Событие
     await this.eventsService.add(req.user.userId, {
       eventType: 'create_step',
       goalId: Number(goalId),
       stepId: step.id,
-      sphere: goal.sphere || undefined, // << берём sphere из цели
+      sphere: goal.sphere || undefined,
       payload: { value: body.value, note: body.note },
       source: 'web',
     });
@@ -80,6 +86,8 @@ export class StepsController {
     @Param('goalId') goalId: string,
     @Param('stepId') stepId: string,
   ) {
+    console.log('🗑️ Deleting step:', stepId, 'from goal:', goalId);
+
     const step = await this.prisma.step.findUnique({ 
       where: { id: Number(stepId) } 
     });
@@ -100,12 +108,12 @@ export class StepsController {
       where: { id: Number(stepId) } 
     });
 
-    // Отправляем событие
+    // Событие
     await this.eventsService.add(req.user.userId, {
       eventType: 'delete_step',
       stepId: Number(stepId),
       goalId: goal.id,
-      sphere: goal.sphere || undefined, // << добавили sphere
+      sphere: goal.sphere || undefined,
       payload: { 
         value: step.value,
         note: step.note,
@@ -113,6 +121,7 @@ export class StepsController {
       source: 'web',
     });
 
+    console.log('✅ Step deleted:', stepId);
     return { message: 'Шаг удалён' };
   }
 }
