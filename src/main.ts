@@ -5,32 +5,41 @@ import { join } from 'path';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
-  app.setGlobalPrefix('api');
-  app.useStaticAssets(join(__dirname, '..', '..', 'uploads'), {
-  prefix: '/uploads/',
-  });
   
+  app.setGlobalPrefix('api');
+  
+  app.useStaticAssets(join(__dirname, '..', '..', 'uploads'), {
+    prefix: '/uploads/',
+  });
+
+  // CORS конфигурация
   app.enableCors({
-    origin: ['http://localhost:5173', 
+    origin: [
+      'http://localhost:5173',
       'http://localhost:3000',
-      'https://stay-mot-beta.vercel.app/',
-      'https://trackerbackend-so26.onrender.com',
-      'https://stay-mot-beta-6zzb4xmne-vo1kas-projects.vercel.app/'
-    ], // сюда добавь адреса фронта, с которых будут запросы
+      // Vercel production domain
+      'https://stay-mot-beta.vercel.app',
+      // Vercel preview domains (без слэша!)
+      /^https:\/\/stay-mot-beta-.*\.vercel\.app$/,
+    ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-     allowedHeaders: [
+    allowedHeaders: [
       'Content-Type',
       'Authorization',
-      'Cache-Control',      // ← ДОБАВЬ
-      'Pragma',             // ← ДОБАВЬ
-      'Expires',            // ← ДОБАВЬ
+      'Cache-Control',
+      'Pragma',
+      'Expires',
       'X-Requested-With',
     ],
-
-    credentials: true, // если используешь куки или авторизацию с credentials
+    credentials: true,
   });
+
   console.log('Serving static from:', join(__dirname, '..', 'uploads'));
 
-  await app.listen(3000);
+  // Порт из environment variable (Render устанавливает автоматически)
+  const port = process.env.PORT || 3000;
+  await app.listen(port);
+  
+  console.log(`🚀 Application is running on: http://localhost:${port}/api`);
 }
 bootstrap();
